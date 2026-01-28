@@ -276,6 +276,7 @@
     <script>
         let cachedMovies = [];
         let currentUsername = '';
+        let useAPI = false;
 
         const usernameInput = document.getElementById('username');
         const pickBtn = document.getElementById('pickBtn');
@@ -312,11 +313,26 @@
                 let page = 1;
                 let hasMore = true;
 
+                // Try watchlistpicker.com API first (more reliable), then CORS proxies
+                async function tryWatchlistPickerAPI(user) {
+                    try {
+                        const response = await fetch(`https://watchlistpicker.com/api/film?users=${user}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.slug) {
+                                return { useAPI: true, film: data };
+                            }
+                        }
+                    } catch (e) {
+                        // API not available, fall back to scraping
+                    }
+                    return null;
+                }
+
                 // Try multiple CORS proxies in order
                 const corsProxies = [
                     (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-                    (url) => `https://cors-anywhere.herokuapp.com/${url}`
+                    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
                 ];
 
                 async function fetchWithProxy(targetUrl) {
@@ -326,8 +342,8 @@
                             const response = await fetch(proxyUrl);
                             if (response.ok) {
                                 const text = await response.text();
-                                // Check if it's an error page
-                                if (!text.includes('error') || text.includes('data-film')) {
+                                // Check if it's a valid page (not error or Cloudflare challenge)
+                                if (text.includes('data-film') || text.includes('poster-container') || text.includes('griditem')) {
                                     return text;
                                 }
                             }
@@ -338,32 +354,48 @@
                     return null;
                 }
 
-                while (hasMore) {
-                    const targetUrl = `https://letterboxd.com/${username}/watchlist/page/${page}/`;
-                    const html = await fetchWithProxy(targetUrl);
+                // First, try the watchlistpicker.com API (more reliable)
+                const apiResult = await tryWatchlistPickerAPI(username);
+                if (apiResult && apiResult.useAPI) {
+                    // API returns a single random film - we'll use it directly
+                    const film = apiResult.film;
+                    cachedMovies.push({
+                        slug: film.slug,
+                        title: film.film_name || film.slug.replace(/-/g, ' '),
+                        poster: film.image_url || '',
+                        year: film.release_year || '',
+                        link: `https://letterboxd.com/film/${film.slug}/`
+                    });
+                    useAPI = true;
+                } else {
+                    // Fall back to scraping
+                    while (hasMore) {
+                        const targetUrl = `https://letterboxd.com/${username}/watchlist/page/${page}/`;
+                        const html = await fetchWithProxy(targetUrl);
 
-                    if (!html) {
-                        if (page === 1) {
-                            throw new Error('User not found or watchlist is private');
+                        if (!html) {
+                            if (page === 1) {
+                                throw new Error('Unable to fetch watchlist. The user may not exist, the watchlist may be private, or Letterboxd is blocking requests.');
+                            }
+                            hasMore = false;
+                            continue;
                         }
-                        hasMore = false;
-                        continue;
-                    }
 
-                    // Check for Cloudflare challenge
-                    if (html.includes('challenge-platform') || html.includes('Just a moment')) {
-                        throw new Error('Letterboxd is blocking requests. Try again later.');
-                    }
+                        // Check for Cloudflare challenge
+                        if (html.includes('challenge-platform') || html.includes('Just a moment')) {
+                            throw new Error('Letterboxd is blocking requests due to bot protection. Try using watchlistpicker.com directly.');
+                        }
 
-                    const movies = parseMovies(html);
+                        const movies = parseMovies(html);
 
-                    if (movies.length === 0) {
-                        hasMore = false;
-                    } else {
-                        cachedMovies.push(...movies);
-                        page++;
-                        // Safety limit
-                        if (page > 50) hasMore = false;
+                        if (movies.length === 0) {
+                            hasMore = false;
+                        } else {
+                            cachedMovies.push(...movies);
+                            page++;
+                            // Safety limit
+                            if (page > 50) hasMore = false;
+                        }
                     }
                 }
 
@@ -443,14 +475,37 @@
             return movies;
         }
 
-        function pickAnother() {
+        async function pickAnother() {
+            // If using API mode, fetch a new random film each time
+            if (useAPI && currentUsername) {
+                showLoading(true);
+                try {
+                    const response = await fetch(`https://watchlistpicker.com/api/film?users=${currentUsername}`);
+                    if (response.ok) {
+                        const film = await response.json();
+                        if (film && film.slug) {
+                            cachedMovies = [{
+                                slug: film.slug,
+                                title: film.film_name || film.slug.replace(/-/g, ' '),
+                                poster: film.image_url || '',
+                                year: film.release_year || '',
+                                link: `https://letterboxd.com/film/${film.slug}/`
+                            }];
+                        }
+                    }
+                } catch (e) {
+                    // Keep showing current movie if API fails
+                }
+                showLoading(false);
+            }
+
             if (cachedMovies.length === 0) return;
 
             const randomIndex = Math.floor(Math.random() * cachedMovies.length);
             const movie = cachedMovies[randomIndex];
 
             document.getElementById('movieTitle').textContent = formatTitle(movie.title);
-            document.getElementById('movieYear').textContent = extractYear(movie.title);
+            document.getElementById('movieYear').textContent = movie.year || extractYear(movie.title);
             document.getElementById('movieLink').href = movie.link;
 
             const posterImg = document.getElementById('poster');
@@ -465,7 +520,7 @@
                 noPoster.style.display = 'flex';
             }
 
-            document.getElementById('stats').textContent = `From ${cachedMovies.length} movies in watchlist`;
+            document.getElementById('stats').textContent = useAPI ? 'Powered by watchlistpicker.com' : `From ${cachedMovies.length} movies in watchlist`;
             showResult();
         }
 
