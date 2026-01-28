@@ -315,26 +315,14 @@
             currentUsername = username;
 
             try {
-                // Try our own serverless API first (works best when deployed on Vercel)
+                // Try our own serverless API first (Cloudflare Workers)
                 async function tryOwnAPI(user) {
                     try {
-                        // Use relative URL if on same domain, otherwise try the Vercel deployment
-                        const apiUrls = [
-                            `/api/watchlist?username=${user}`,
-                            `https://letterboxd-random.vercel.app/api/watchlist?username=${user}`
-                        ];
-
-                        for (const apiUrl of apiUrls) {
-                            try {
-                                const response = await fetch(apiUrl);
-                                if (response.ok) {
-                                    const data = await response.json();
-                                    if (data.movies && data.movies.length > 0) {
-                                        return { success: true, movies: data.movies };
-                                    }
-                                }
-                            } catch (e) {
-                                continue;
+                        const response = await fetch(`/api/watchlist?username=${user}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.movies && data.movies.length > 0) {
+                                return { success: true, movies: data.movies };
                             }
                         }
                     } catch (e) {
