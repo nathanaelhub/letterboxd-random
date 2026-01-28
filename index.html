@@ -356,32 +356,45 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            const posterElements = doc.querySelectorAll('.poster-container, li.poster-container, div[data-film-slug]');
+            // Letterboxd uses li.griditem or li.poster-container for watchlist items
+            const containers = doc.querySelectorAll('li.griditem, li.poster-container');
 
-            posterElements.forEach(el => {
-                const filmDiv = el.querySelector('[data-film-slug]') || el;
-                const slug = filmDiv.getAttribute('data-film-slug');
+            containers.forEach(container => {
+                // Find the div with film data - could be .react-component or have data attributes directly
+                const filmDiv = container.querySelector('.react-component') ||
+                                container.querySelector('[data-film-slug]') ||
+                                container.querySelector('[data-film-id]') ||
+                                container.querySelector('div');
 
-                if (slug) {
-                    const img = el.querySelector('img');
-                    let poster = '';
+                if (!filmDiv) return;
 
-                    if (img) {
-                        poster = img.getAttribute('src') || img.getAttribute('data-src') || '';
-                        // Convert to larger image
-                        poster = poster.replace(/\-0\-[0-9]+\-0\-[0-9]+\-crop/, '-0-460-0-690-crop');
-                    }
+                // Get slug from various possible attributes
+                const slug = filmDiv.getAttribute('data-item-slug') ||
+                             filmDiv.getAttribute('data-film-slug') ||
+                             filmDiv.getAttribute('data-target-link')?.replace('/film/', '').replace('/', '');
 
-                    const titleEl = el.querySelector('img');
-                    const altText = titleEl ? titleEl.getAttribute('alt') : '';
+                if (!slug) return;
 
-                    movies.push({
-                        slug: slug,
-                        title: altText || slug.replace(/-/g, ' '),
-                        poster: poster,
-                        link: `https://letterboxd.com/film/${slug}/`
-                    });
+                // Get film name from data attribute or img alt
+                const img = container.querySelector('img');
+                const name = filmDiv.getAttribute('data-item-name') ||
+                             (img ? img.getAttribute('alt') : null) ||
+                             slug.replace(/-/g, ' ');
+
+                // Get poster image
+                let poster = '';
+                if (img) {
+                    poster = img.getAttribute('src') || img.getAttribute('data-src') || '';
+                    // Convert to larger image size
+                    poster = poster.replace(/\-0\-[0-9]+\-0\-[0-9]+\-crop/, '-0-460-0-690-crop');
                 }
+
+                movies.push({
+                    slug: slug,
+                    title: name,
+                    poster: poster,
+                    link: `https://letterboxd.com/film/${slug}/`
+                });
             });
 
             return movies;
