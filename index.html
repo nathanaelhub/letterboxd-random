@@ -312,18 +312,49 @@
                 let page = 1;
                 let hasMore = true;
 
-                while (hasMore) {
-                    const url = `https://corsproxy.io/?https://letterboxd.com/${username}/watchlist/page/${page}/`;
-                    const response = await fetch(url);
+                // Try multiple CORS proxies in order
+                const corsProxies = [
+                    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                    (url) => `https://cors-anywhere.herokuapp.com/${url}`
+                ];
 
-                    if (!response.ok) {
-                        if (response.status === 404) {
+                async function fetchWithProxy(targetUrl) {
+                    for (const proxyFn of corsProxies) {
+                        try {
+                            const proxyUrl = proxyFn(targetUrl);
+                            const response = await fetch(proxyUrl);
+                            if (response.ok) {
+                                const text = await response.text();
+                                // Check if it's an error page
+                                if (!text.includes('error') || text.includes('data-film')) {
+                                    return text;
+                                }
+                            }
+                        } catch (e) {
+                            continue;
+                        }
+                    }
+                    return null;
+                }
+
+                while (hasMore) {
+                    const targetUrl = `https://letterboxd.com/${username}/watchlist/page/${page}/`;
+                    const html = await fetchWithProxy(targetUrl);
+
+                    if (!html) {
+                        if (page === 1) {
                             throw new Error('User not found or watchlist is private');
                         }
-                        throw new Error('Failed to fetch watchlist');
+                        hasMore = false;
+                        continue;
                     }
 
-                    const html = await response.text();
+                    // Check for Cloudflare challenge
+                    if (html.includes('challenge-platform') || html.includes('Just a moment')) {
+                        throw new Error('Letterboxd is blocking requests. Try again later.');
+                    }
+
                     const movies = parseMovies(html);
 
                     if (movies.length === 0) {
@@ -356,28 +387,40 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            // Letterboxd uses li.griditem or li.poster-container for watchlist items
-            const containers = doc.querySelectorAll('li.griditem, li.poster-container');
+            // Try multiple selector strategies
+            // Strategy 1: li.griditem or li.poster-container (standard watchlist)
+            let containers = doc.querySelectorAll('li.griditem, li.poster-container');
+
+            // Strategy 2: Any element with data-film-slug attribute
+            if (containers.length === 0) {
+                containers = doc.querySelectorAll('[data-film-slug]');
+            }
+
+            // Strategy 3: div.film-poster elements
+            if (containers.length === 0) {
+                containers = doc.querySelectorAll('div.film-poster, .poster');
+            }
 
             containers.forEach(container => {
-                // Find the div with film data - could be .react-component or have data attributes directly
-                const filmDiv = container.querySelector('.react-component') ||
-                                container.querySelector('[data-film-slug]') ||
+                // Find the div with film data
+                const filmDiv = container.querySelector('[data-film-slug]') ||
                                 container.querySelector('[data-film-id]') ||
-                                container.querySelector('div');
+                                container.querySelector('.react-component') ||
+                                (container.hasAttribute('data-film-slug') ? container : container.querySelector('div'));
 
-                if (!filmDiv) return;
+                const targetEl = filmDiv || container;
 
                 // Get slug from various possible attributes
-                const slug = filmDiv.getAttribute('data-item-slug') ||
-                             filmDiv.getAttribute('data-film-slug') ||
-                             filmDiv.getAttribute('data-target-link')?.replace('/film/', '').replace('/', '');
+                const slug = targetEl.getAttribute('data-film-slug') ||
+                             targetEl.getAttribute('data-item-slug') ||
+                             targetEl.getAttribute('data-target-link')?.replace('/film/', '').replace(/\//g, '');
 
                 if (!slug) return;
 
                 // Get film name from data attribute or img alt
-                const img = container.querySelector('img');
-                const name = filmDiv.getAttribute('data-item-name') ||
+                const img = container.querySelector('img') || targetEl.querySelector('img');
+                const name = targetEl.getAttribute('data-item-name') ||
+                             targetEl.getAttribute('data-film-name') ||
                              (img ? img.getAttribute('alt') : null) ||
                              slug.replace(/-/g, ' ');
 
