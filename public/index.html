@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Letterboxd Random</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='30' cy='50' r='12' fill='%23ff8000'/><circle cx='50' cy='50' r='12' fill='%2300e054'/><circle cx='70' cy='50' r='12' fill='%2340bcf4'/></svg>">
     <style>
         * {
             margin: 0;
@@ -13,13 +14,13 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #14181c 0%, #1c2228 100%);
+            background: #14181c;
             min-height: 100vh;
-            color: #fff;
+            color: #99aabb;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 40px 20px;
         }
 
         .container {
@@ -28,39 +29,62 @@
             text-align: center;
         }
 
+        /* Letterboxd Logo - Three Dots */
+        .logo {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .logo-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .logo-dot.orange { background: #ff8000; }
+        .logo-dot.green { background: #00e054; }
+        .logo-dot.blue { background: #40bcf4; }
+
         h1 {
-            color: #ff8000;
-            font-size: 1.8rem;
+            color: #fff;
+            font-size: 1.5rem;
+            font-weight: 600;
             margin-bottom: 8px;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
 
         .subtitle {
-            color: #9ab;
-            font-size: 0.9rem;
-            margin-bottom: 30px;
+            color: #678;
+            font-size: 0.95rem;
+            margin-bottom: 32px;
+        }
+
+        .input-wrapper {
+            margin-bottom: 16px;
         }
 
         .input-group {
             display: flex;
             align-items: center;
             background: #2c3440;
-            border-radius: 8px;
-            padding: 4px;
-            margin-bottom: 15px;
-            border: 2px solid transparent;
-            transition: border-color 0.3s;
+            border-radius: 4px;
+            border: 1px solid #456;
+            transition: border-color 0.2s;
         }
 
         .input-group:focus-within {
-            border-color: #ff8000;
+            border-color: #00e054;
         }
 
         .prefix {
             color: #678;
-            font-size: 0.85rem;
-            padding: 12px 0 12px 12px;
+            font-size: 0.9rem;
+            padding: 12px;
+            padding-right: 0;
             white-space: nowrap;
+            user-select: none;
         }
 
         input[type="text"] {
@@ -68,31 +92,32 @@
             background: transparent;
             border: none;
             color: #fff;
-            font-size: 1rem;
-            padding: 12px 12px 12px 4px;
+            font-size: 0.95rem;
+            padding: 12px;
+            padding-left: 4px;
             outline: none;
         }
 
         input[type="text"]::placeholder {
-            color: #567;
+            color: #556;
         }
 
         .btn {
-            background: linear-gradient(135deg, #ff8000 0%, #ff6000 100%);
-            color: #fff;
+            background: #00e054;
+            color: #14181c;
             border: none;
-            padding: 14px 28px;
-            font-size: 1rem;
+            padding: 12px 24px;
+            font-size: 0.95rem;
             font-weight: 600;
-            border-radius: 8px;
+            border-radius: 4px;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.2s;
             width: 100%;
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(255, 128, 0, 0.4);
+            background: #00c848;
+            transform: translateY(-1px);
         }
 
         .btn:active {
@@ -100,45 +125,54 @@
         }
 
         .btn:disabled {
-            background: #445;
+            background: #456;
+            color: #789;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
         }
 
         .result {
-            margin-top: 30px;
+            margin-top: 40px;
             display: none;
         }
 
         .result.show {
             display: block;
-            animation: fadeIn 0.5s ease;
+            animation: fadeIn 0.4s ease;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .poster-container {
+        .poster-wrapper {
             position: relative;
             display: inline-block;
             margin-bottom: 20px;
         }
 
         .poster {
-            max-width: 230px;
-            width: 100%;
-            border-radius: 8px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            width: 230px;
+            height: 345px;
+            object-fit: cover;
+            border-radius: 4px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .poster:hover {
+            border-color: #00e054;
+            box-shadow: 0 0 20px rgba(0, 224, 84, 0.3);
+            transform: scale(1.02);
         }
 
         .no-poster {
             width: 230px;
             height: 345px;
             background: #2c3440;
-            border-radius: 8px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -147,72 +181,71 @@
         }
 
         .movie-title {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             color: #fff;
         }
 
         .movie-year {
-            color: #9ab;
+            color: #678;
             font-size: 1rem;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
         }
 
         .movie-link {
             display: inline-block;
-            color: #ff8000;
+            color: #40bcf4;
             text-decoration: none;
             font-size: 0.9rem;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
             transition: color 0.2s;
         }
 
         .movie-link:hover {
-            color: #ffaa44;
-            text-decoration: underline;
+            color: #fff;
         }
 
         .btn-secondary {
-            background: #2c3440;
-            margin-top: 10px;
+            background: #456;
+            color: #fff;
+            margin-top: 8px;
         }
 
         .btn-secondary:hover {
-            background: #3c4450;
-            box-shadow: none;
+            background: #567;
         }
 
         .error {
             background: rgba(255, 80, 80, 0.1);
-            border: 1px solid #ff5050;
+            border: 1px solid #e54b4b;
             color: #ff8080;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 14px;
+            border-radius: 4px;
             margin-top: 20px;
             font-size: 0.9rem;
         }
 
         .error a {
-            color: #ff8000;
-            text-decoration: underline;
+            color: #40bcf4;
         }
 
         .loading {
-            color: #9ab;
-            margin-top: 30px;
+            color: #99aabb;
+            margin-top: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
         .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #445;
-            border-top-color: #ff8000;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #456;
+            border-top-color: #00e054;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-            vertical-align: middle;
+            animation: spin 0.8s linear infinite;
         }
 
         @keyframes spin {
@@ -220,48 +253,75 @@
         }
 
         .stats {
-            color: #678;
+            color: #556;
             font-size: 0.8rem;
-            margin-top: 15px;
+            margin-top: 16px;
         }
 
         footer {
             margin-top: auto;
-            padding-top: 40px;
+            padding-top: 60px;
             color: #456;
             font-size: 0.75rem;
         }
 
         footer a {
-            color: #678;
+            color: #567;
             text-decoration: none;
+            transition: color 0.2s;
         }
 
         footer a:hover {
-            color: #ff8000;
+            color: #00e054;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            body {
+                padding: 30px 16px;
+            }
+
+            h1 {
+                font-size: 1.3rem;
+            }
+
+            .poster, .no-poster {
+                width: 200px;
+                height: 300px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>LETTERBOXD RANDOM</h1>
-        <p class="subtitle">Pick a random movie from your watchlist</p>
+        <!-- Letterboxd Logo -->
+        <div class="logo">
+            <div class="logo-dot orange"></div>
+            <div class="logo-dot green"></div>
+            <div class="logo-dot blue"></div>
+        </div>
 
-        <div class="input-group">
-            <span class="prefix">letterboxd.com/</span>
-            <input type="text" id="username" placeholder="username" autocomplete="off" autocapitalize="off">
+        <h1>Watchlist Randomizer</h1>
+        <p class="subtitle">Pick a random movie from your Letterboxd watchlist</p>
+
+        <div class="input-wrapper">
+            <div class="input-group">
+                <span class="prefix">letterboxd.com/</span>
+                <input type="text" id="username" placeholder="username" autocomplete="off" autocapitalize="off" spellcheck="false">
+            </div>
         </div>
 
         <button class="btn" id="pickBtn" onclick="fetchWatchlist()">Pick Random Movie</button>
 
         <div id="loading" class="loading" style="display: none;">
-            <span class="spinner"></span>Fetching watchlist...
+            <span class="spinner"></span>
+            <span>Fetching watchlist...</span>
         </div>
 
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="result" class="result">
-            <div class="poster-container">
+            <div class="poster-wrapper">
                 <img id="poster" class="poster" src="" alt="Movie poster">
                 <div id="noPoster" class="no-poster" style="display: none;">No poster available</div>
             </div>
@@ -275,7 +335,7 @@
     </div>
 
     <footer>
-        <a href="https://watchlistpicker.com" target="_blank">watchlistpicker.com</a> fallback available
+        Powered by <a href="https://letterboxd.com" target="_blank">Letterboxd</a>
     </footer>
 
     <script>
@@ -348,56 +408,6 @@
                     return null;
                 }
 
-                // Try CORS proxies as last resort
-                async function tryWithCorsProxy(user) {
-                    const corsProxies = [
-                        (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-                    ];
-
-                    const movies = [];
-                    let page = 1;
-                    let hasMore = true;
-
-                    while (hasMore && page <= 20) {
-                        const targetUrl = `https://letterboxd.com/${user}/watchlist/page/${page}/`;
-                        let html = null;
-
-                        for (const proxyFn of corsProxies) {
-                            try {
-                                const response = await fetch(proxyFn(targetUrl));
-                                if (response.ok) {
-                                    const text = await response.text();
-                                    if (text.includes('data-film') || text.includes('poster-container') || text.includes('griditem')) {
-                                        html = text;
-                                        break;
-                                    }
-                                }
-                            } catch (e) {}
-                        }
-
-                        if (!html) {
-                            hasMore = false;
-                            continue;
-                        }
-
-                        if (html.includes('challenge-platform') || html.includes('Just a moment')) {
-                            hasMore = false;
-                            continue;
-                        }
-
-                        const pageMovies = parseMovies(html);
-                        if (pageMovies.length === 0) {
-                            hasMore = false;
-                        } else {
-                            movies.push(...pageMovies);
-                            page++;
-                        }
-                    }
-
-                    return movies.length > 0 ? { success: true, movies } : null;
-                }
-
                 // Strategy 1: Try our own serverless API
                 let result = await tryOwnAPI(username);
 
@@ -417,18 +427,13 @@
                     }
                 }
 
-                // Strategy 3: Try CORS proxies (client-side scraping)
-                if (!result && cachedMovies.length === 0) {
-                    result = await tryWithCorsProxy(username);
-                }
-
                 // Use result if we got one
                 if (result && result.movies) {
                     cachedMovies.push(...result.movies);
                 }
 
                 if (cachedMovies.length === 0) {
-                    throw new Error('Could not fetch watchlist. Letterboxd may be blocking requests. Try <a href="https://watchlistpicker.com" target="_blank">watchlistpicker.com</a> instead.');
+                    throw new Error('Could not fetch watchlist. User may not exist or watchlist is private.');
                 }
 
                 showLoading(false);
@@ -440,67 +445,6 @@
                 cachedMovies = [];
                 currentUsername = '';
             }
-        }
-
-        function parseMovies(html) {
-            const movies = [];
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            // Try multiple selector strategies
-            // Strategy 1: li.griditem or li.poster-container (standard watchlist)
-            let containers = doc.querySelectorAll('li.griditem, li.poster-container');
-
-            // Strategy 2: Any element with data-film-slug attribute
-            if (containers.length === 0) {
-                containers = doc.querySelectorAll('[data-film-slug]');
-            }
-
-            // Strategy 3: div.film-poster elements
-            if (containers.length === 0) {
-                containers = doc.querySelectorAll('div.film-poster, .poster');
-            }
-
-            containers.forEach(container => {
-                // Find the div with film data
-                const filmDiv = container.querySelector('[data-film-slug]') ||
-                                container.querySelector('[data-film-id]') ||
-                                container.querySelector('.react-component') ||
-                                (container.hasAttribute('data-film-slug') ? container : container.querySelector('div'));
-
-                const targetEl = filmDiv || container;
-
-                // Get slug from various possible attributes
-                const slug = targetEl.getAttribute('data-film-slug') ||
-                             targetEl.getAttribute('data-item-slug') ||
-                             targetEl.getAttribute('data-target-link')?.replace('/film/', '').replace(/\//g, '');
-
-                if (!slug) return;
-
-                // Get film name from data attribute or img alt
-                const img = container.querySelector('img') || targetEl.querySelector('img');
-                const name = targetEl.getAttribute('data-item-name') ||
-                             targetEl.getAttribute('data-film-name') ||
-                             (img ? img.getAttribute('alt') : null) ||
-                             slug.replace(/-/g, ' ');
-
-                // Get poster image
-                let poster = '';
-                if (img) {
-                    poster = img.getAttribute('src') || img.getAttribute('data-src') || '';
-                    // Convert to larger image size
-                    poster = poster.replace(/\-0\-[0-9]+\-0\-[0-9]+\-crop/, '-0-460-0-690-crop');
-                }
-
-                movies.push({
-                    slug: slug,
-                    title: name,
-                    poster: poster,
-                    link: `https://letterboxd.com/film/${slug}/`
-                });
-            });
-
-            return movies;
         }
 
         async function pickAnother() {
@@ -556,7 +500,6 @@
         }
 
         function formatTitle(title) {
-            // Remove year from title if present
             return title.replace(/\s*\(\d{4}\)\s*$/, '').trim() || title;
         }
 
@@ -566,7 +509,7 @@
         }
 
         function showLoading(show) {
-            loadingEl.style.display = show ? 'block' : 'none';
+            loadingEl.style.display = show ? 'flex' : 'none';
             pickBtn.disabled = show;
         }
 
