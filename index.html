@@ -193,6 +193,11 @@
             font-size: 0.9rem;
         }
 
+        .error a {
+            color: #ff8000;
+            text-decoration: underline;
+        }
+
         .loading {
             color: #9ab;
             margin-top: 30px;
@@ -270,7 +275,7 @@
     </div>
 
     <footer>
-        Built with Letterboxd's public RSS feeds
+        <a href="https://watchlistpicker.com" target="_blank">watchlistpicker.com</a> fallback available
     </footer>
 
     <script>
@@ -316,9 +321,14 @@
                 // Try watchlistpicker.com API first (more reliable), then CORS proxies
                 async function tryWatchlistPickerAPI(user) {
                     try {
-                        const response = await fetch(`https://watchlistpicker.com/api/film?users=${user}`);
+                        const response = await fetch(`https://watchlistpicker.com/api?users=${user}`);
                         if (response.ok) {
-                            const data = await response.json();
+                            const text = await response.text();
+                            // Check if it's an error message
+                            if (text.includes('error') || text.includes('Union error')) {
+                                return null;
+                            }
+                            const data = JSON.parse(text);
                             if (data && data.slug) {
                                 return { useAPI: true, film: data };
                             }
@@ -400,7 +410,7 @@
                 }
 
                 if (cachedMovies.length === 0) {
-                    throw new Error('Watchlist is empty or not accessible');
+                    throw new Error('Could not fetch watchlist. Letterboxd may be blocking requests. Try <a href="https://watchlistpicker.com" target="_blank">watchlistpicker.com</a> instead.');
                 }
 
                 showLoading(false);
@@ -480,7 +490,7 @@
             if (useAPI && currentUsername) {
                 showLoading(true);
                 try {
-                    const response = await fetch(`https://watchlistpicker.com/api/film?users=${currentUsername}`);
+                    const response = await fetch(`https://watchlistpicker.com/api?users=${currentUsername}`);
                     if (response.ok) {
                         const film = await response.json();
                         if (film && film.slug) {
@@ -540,7 +550,7 @@
         }
 
         function showError(message) {
-            errorEl.textContent = message;
+            errorEl.innerHTML = message;
             errorEl.style.display = 'block';
         }
 
