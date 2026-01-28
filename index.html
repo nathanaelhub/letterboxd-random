@@ -315,98 +315,128 @@
             currentUsername = username;
 
             try {
-                let page = 1;
-                let hasMore = true;
+                // Try our own serverless API first (works best when deployed on Vercel)
+                async function tryOwnAPI(user) {
+                    try {
+                        // Use relative URL if on same domain, otherwise try the Vercel deployment
+                        const apiUrls = [
+                            `/api/watchlist?username=${user}`,
+                            `https://letterboxd-random.vercel.app/api/watchlist?username=${user}`
+                        ];
 
-                // Try watchlistpicker.com API first (more reliable), then CORS proxies
+                        for (const apiUrl of apiUrls) {
+                            try {
+                                const response = await fetch(apiUrl);
+                                if (response.ok) {
+                                    const data = await response.json();
+                                    if (data.movies && data.movies.length > 0) {
+                                        return { success: true, movies: data.movies };
+                                    }
+                                }
+                            } catch (e) {
+                                continue;
+                            }
+                        }
+                    } catch (e) {
+                        // API not available
+                    }
+                    return null;
+                }
+
+                // Try watchlistpicker.com API as fallback
                 async function tryWatchlistPickerAPI(user) {
                     try {
                         const response = await fetch(`https://watchlistpicker.com/api?users=${user}`);
                         if (response.ok) {
                             const text = await response.text();
-                            // Check if it's an error message
-                            if (text.includes('error') || text.includes('Union error')) {
-                                return null;
-                            }
-                            const data = JSON.parse(text);
-                            if (data && data.slug) {
-                                return { useAPI: true, film: data };
-                            }
-                        }
-                    } catch (e) {
-                        // API not available, fall back to scraping
-                    }
-                    return null;
-                }
-
-                // Try multiple CORS proxies in order
-                const corsProxies = [
-                    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-                ];
-
-                async function fetchWithProxy(targetUrl) {
-                    for (const proxyFn of corsProxies) {
-                        try {
-                            const proxyUrl = proxyFn(targetUrl);
-                            const response = await fetch(proxyUrl);
-                            if (response.ok) {
-                                const text = await response.text();
-                                // Check if it's a valid page (not error or Cloudflare challenge)
-                                if (text.includes('data-film') || text.includes('poster-container') || text.includes('griditem')) {
-                                    return text;
+                            if (!text.includes('error') && !text.includes('Union error')) {
+                                const data = JSON.parse(text);
+                                if (data && data.slug) {
+                                    return { useExternalAPI: true, film: data };
                                 }
                             }
-                        } catch (e) {
-                            continue;
                         }
-                    }
+                    } catch (e) {}
                     return null;
                 }
 
-                // First, try the watchlistpicker.com API (more reliable)
-                const apiResult = await tryWatchlistPickerAPI(username);
-                if (apiResult && apiResult.useAPI) {
-                    // API returns a single random film - we'll use it directly
-                    const film = apiResult.film;
-                    cachedMovies.push({
-                        slug: film.slug,
-                        title: film.film_name || film.slug.replace(/-/g, ' '),
-                        poster: film.image_url || '',
-                        year: film.release_year || '',
-                        link: `https://letterboxd.com/film/${film.slug}/`
-                    });
-                    useAPI = true;
-                } else {
-                    // Fall back to scraping
-                    while (hasMore) {
-                        const targetUrl = `https://letterboxd.com/${username}/watchlist/page/${page}/`;
-                        const html = await fetchWithProxy(targetUrl);
+                // Try CORS proxies as last resort
+                async function tryWithCorsProxy(user) {
+                    const corsProxies = [
+                        (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+                    ];
+
+                    const movies = [];
+                    let page = 1;
+                    let hasMore = true;
+
+                    while (hasMore && page <= 20) {
+                        const targetUrl = `https://letterboxd.com/${user}/watchlist/page/${page}/`;
+                        let html = null;
+
+                        for (const proxyFn of corsProxies) {
+                            try {
+                                const response = await fetch(proxyFn(targetUrl));
+                                if (response.ok) {
+                                    const text = await response.text();
+                                    if (text.includes('data-film') || text.includes('poster-container') || text.includes('griditem')) {
+                                        html = text;
+                                        break;
+                                    }
+                                }
+                            } catch (e) {}
+                        }
 
                         if (!html) {
-                            if (page === 1) {
-                                throw new Error('Unable to fetch watchlist. The user may not exist, the watchlist may be private, or Letterboxd is blocking requests.');
-                            }
                             hasMore = false;
                             continue;
                         }
 
-                        // Check for Cloudflare challenge
                         if (html.includes('challenge-platform') || html.includes('Just a moment')) {
-                            throw new Error('Letterboxd is blocking requests due to bot protection. Try using watchlistpicker.com directly.');
+                            hasMore = false;
+                            continue;
                         }
 
-                        const movies = parseMovies(html);
-
-                        if (movies.length === 0) {
+                        const pageMovies = parseMovies(html);
+                        if (pageMovies.length === 0) {
                             hasMore = false;
                         } else {
-                            cachedMovies.push(...movies);
+                            movies.push(...pageMovies);
                             page++;
-                            // Safety limit
-                            if (page > 50) hasMore = false;
                         }
                     }
+
+                    return movies.length > 0 ? { success: true, movies } : null;
+                }
+
+                // Strategy 1: Try our own serverless API
+                let result = await tryOwnAPI(username);
+
+                // Strategy 2: Try watchlistpicker.com API
+                if (!result) {
+                    const wlpResult = await tryWatchlistPickerAPI(username);
+                    if (wlpResult && wlpResult.useExternalAPI) {
+                        const film = wlpResult.film;
+                        cachedMovies.push({
+                            slug: film.slug,
+                            title: film.film_name || film.slug.replace(/-/g, ' '),
+                            poster: film.image_url || '',
+                            year: film.release_year || '',
+                            link: `https://letterboxd.com/film/${film.slug}/`
+                        });
+                        useAPI = true;
+                    }
+                }
+
+                // Strategy 3: Try CORS proxies (client-side scraping)
+                if (!result && cachedMovies.length === 0) {
+                    result = await tryWithCorsProxy(username);
+                }
+
+                // Use result if we got one
+                if (result && result.movies) {
+                    cachedMovies.push(...result.movies);
                 }
 
                 if (cachedMovies.length === 0) {
@@ -486,26 +516,27 @@
         }
 
         async function pickAnother() {
-            // If using API mode, fetch a new random film each time
+            // If using external API mode (watchlistpicker.com), fetch a new random film
             if (useAPI && currentUsername) {
                 showLoading(true);
                 try {
                     const response = await fetch(`https://watchlistpicker.com/api?users=${currentUsername}`);
                     if (response.ok) {
-                        const film = await response.json();
-                        if (film && film.slug) {
-                            cachedMovies = [{
-                                slug: film.slug,
-                                title: film.film_name || film.slug.replace(/-/g, ' '),
-                                poster: film.image_url || '',
-                                year: film.release_year || '',
-                                link: `https://letterboxd.com/film/${film.slug}/`
-                            }];
+                        const text = await response.text();
+                        if (!text.includes('error')) {
+                            const film = JSON.parse(text);
+                            if (film && film.slug) {
+                                cachedMovies = [{
+                                    slug: film.slug,
+                                    title: film.film_name || film.slug.replace(/-/g, ' '),
+                                    poster: film.image_url || '',
+                                    year: film.release_year || '',
+                                    link: `https://letterboxd.com/film/${film.slug}/`
+                                }];
+                            }
                         }
                     }
-                } catch (e) {
-                    // Keep showing current movie if API fails
-                }
+                } catch (e) {}
                 showLoading(false);
             }
 
@@ -530,7 +561,9 @@
                 noPoster.style.display = 'flex';
             }
 
-            document.getElementById('stats').textContent = useAPI ? 'Powered by watchlistpicker.com' : `From ${cachedMovies.length} movies in watchlist`;
+            document.getElementById('stats').textContent = useAPI
+                ? 'Powered by watchlistpicker.com'
+                : `From ${cachedMovies.length} movies in watchlist`;
             showResult();
         }
 
