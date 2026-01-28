@@ -38,18 +38,18 @@ async function handleWatchlistAPI(request) {
   }
 
   try {
-    // Step 1: Get the Letterboxd identifier from the watchlist page
-    const letterboxdUrl = `https://letterboxd.com/${username}/watchlist/`;
+    // Step 1: Get the Letterboxd identifier from the RSS feed (not blocked by Cloudflare)
+    const rssUrl = `https://letterboxd.com/${username}/rss/`;
 
-    const idResponse = await fetch(letterboxdUrl, {
+    const idResponse = await fetch(rssUrl, {
       headers: {
-        'Accept': 'application/json',
+        'Accept': 'application/rss+xml',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
       }
     });
 
     if (!idResponse.ok) {
-      return new Response(JSON.stringify({ error: 'User not found or watchlist is private' }), {
+      return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -58,8 +58,10 @@ async function handleWatchlistAPI(request) {
     const letterboxdId = idResponse.headers.get('x-letterboxd-identifier');
 
     if (!letterboxdId) {
-      // Fallback: try to extract from HTML or use username-based approach
-      return await fallbackScrape(username, corsHeaders);
+      return new Response(JSON.stringify({ error: 'Could not get user identifier' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     // Step 2: Fetch watchlist data from StremThru API
