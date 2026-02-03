@@ -479,7 +479,19 @@
 
             document.getElementById('movieTitle').textContent = formatTitle(movie.title);
             document.getElementById('movieYear').textContent = movie.year || extractYear(movie.title);
-            document.getElementById('movieLink').href = movie.link;
+
+            // Handle movie link - only show if we have a valid link
+            const movieLinkEl = document.getElementById('movieLink');
+            if (movie.link && movie.link.startsWith('https://letterboxd.com/film/')) {
+                movieLinkEl.href = movie.link;
+                movieLinkEl.style.display = 'inline-block';
+            } else if (movie.slug) {
+                // Construct link from slug if link is missing
+                movieLinkEl.href = `https://letterboxd.com/film/${movie.slug}/`;
+                movieLinkEl.style.display = 'inline-block';
+            } else {
+                movieLinkEl.style.display = 'none';
+            }
 
             const posterImg = document.getElementById('poster');
             const noPoster = document.getElementById('noPoster');

@@ -88,15 +88,38 @@ async function handleWatchlistAPI(request) {
     }
 
     // Transform StremThru response to our format
-    const movies = data.data.items.map(item => ({
-      slug: item.slug || item.id,
-      title: item.name || item.title,
-      year: item.year ? String(item.year) : '',
-      poster: item.poster || '',
-      tmdb: item.tmdb_id,
-      imdb: item.imdb_id,
-      link: `https://letterboxd.com/film/${item.slug || item.id}/`
-    }));
+    const movies = data.data.items.map(item => {
+      // Extract valid Letterboxd slug - prefer letterboxd_slug, then slug
+      // StremThru may return compound IDs, so we clean them
+      let filmSlug = item.letterboxd_slug || item.slug || '';
+
+      // Clean the slug: remove any prefix like "lbd:" or "movie:" and trim
+      if (filmSlug.includes(':')) {
+        filmSlug = filmSlug.split(':').pop();
+      }
+      filmSlug = filmSlug.trim();
+
+      // If no valid slug, try to create one from the title
+      if (!filmSlug && (item.name || item.title)) {
+        const title = item.name || item.title;
+        const year = item.year ? `-${item.year}` : '';
+        filmSlug = title.toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .trim() + year;
+      }
+
+      return {
+        slug: filmSlug,
+        title: item.name || item.title,
+        year: item.year ? String(item.year) : '',
+        poster: item.poster || '',
+        tmdb: item.tmdb_id,
+        imdb: item.imdb_id,
+        link: filmSlug ? `https://letterboxd.com/film/${filmSlug}/` : ''
+      };
+    }).filter(movie => movie.slug && movie.link);
 
     const random = url.searchParams.get('random') === 'true';
     if (random) {
