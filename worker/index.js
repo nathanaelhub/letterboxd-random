@@ -100,14 +100,14 @@ async function handleWatchlistAPI(request) {
       filmSlug = filmSlug.trim();
 
       // If no valid slug, try to create one from the title
+      // Note: Letterboxd slugs typically don't include the year
       if (!filmSlug && (item.name || item.title)) {
         const title = item.name || item.title;
-        const year = item.year ? `-${item.year}` : '';
         filmSlug = title.toLowerCase()
           .replace(/[^a-z0-9\s-]/g, '')
           .replace(/\s+/g, '-')
           .replace(/-+/g, '-')
-          .trim() + year;
+          .replace(/^-+|-+$/g, '');
       }
 
       return {
