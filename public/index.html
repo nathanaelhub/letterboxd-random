@@ -489,7 +489,7 @@
                 if (x < -ITEM_W || x > W + ITEM_W) continue;
 
                 const dist = Math.abs(x - CX);
-                const alpha = Math.max(0.15, 1 - (dist / (CX + ITEM_W)) * 0.88);
+                const alpha = Math.max(0.25, 1 - (dist / (CX + ITEM_W)) * 0.72);
                 const isActive = isCenter && selectedGenre === g.slug;
 
                 ctx.save();
@@ -499,9 +499,9 @@
                 if (isCenter) {
                     const pw = ITEM_W - 14, ph = H - 14;
                     const px = x - pw / 2, py = H / 2 - ph / 2, rad = 6;
-                    ctx.fillStyle = isActive ? g.color + '2a' : 'rgba(255,255,255,0.04)';
-                    ctx.strokeStyle = isActive ? g.color : 'rgba(255,255,255,0.13)';
-                    ctx.lineWidth = 1.5;
+                    ctx.fillStyle = isActive ? g.color + '45' : g.color + '1e';
+                    ctx.strokeStyle = isActive ? g.color : g.color + '70';
+                    ctx.lineWidth = isActive ? 2 : 1.5;
                     ctx.beginPath();
                     ctx.moveTo(px + rad, py);
                     ctx.lineTo(px + pw - rad, py);
@@ -519,9 +519,10 @@
 
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = isCenter ? (isActive ? g.color : '#c8d6e0') : '#3d4f5f';
-                ctx.font = `${isCenter ? 'bold 14px' : '12px'} -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-                if (isActive) { ctx.shadowColor = g.color; ctx.shadowBlur = 8; }
+                ctx.fillStyle = g.color;
+                ctx.font = `${isCenter ? 'bold 15px' : '12px'} -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+                if (isActive) { ctx.shadowColor = g.color; ctx.shadowBlur = 12; }
+                else if (isCenter) { ctx.shadowColor = g.color; ctx.shadowBlur = 6; }
                 ctx.fillText(g.name, x, H / 2);
                 ctx.restore();
             }
@@ -530,7 +531,7 @@
             const tx1 = CX - ITEM_W / 2 + 6, tx2 = CX + ITEM_W / 2 - 6;
             ctx.strokeStyle = '#00e054';
             ctx.lineWidth = 1.5;
-            ctx.globalAlpha = 0.55;
+            ctx.globalAlpha = 0.75;
             ctx.beginPath();
             ctx.moveTo(tx1, 0);    ctx.lineTo(tx1, 9);
             ctx.moveTo(tx2, 0);    ctx.lineTo(tx2, 9);
