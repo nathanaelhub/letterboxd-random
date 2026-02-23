@@ -279,30 +279,47 @@
             margin-bottom: 16px;
         }
 
-        .wheel-container {
-            position: relative;
+        .roulette-box {
             width: 300px;
-            margin: 0 auto 12px;
-        }
-
-        .wheel-pointer {
-            position: absolute;
-            top: -1px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 9px solid transparent;
-            border-right: 9px solid transparent;
-            border-top: 16px solid #00e054;
-            z-index: 10;
-            filter: drop-shadow(0 0 5px rgba(0, 224, 84, 0.6));
-        }
-
-        #genreWheel {
-            display: block;
-            border-radius: 50%;
+            height: 70px;
+            margin: 0 auto 10px;
+            border: 1px solid #2c3440;
+            border-radius: 6px;
+            overflow: hidden;
             cursor: pointer;
+        }
+
+        .roulette-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .roulette-arrow {
+            background: transparent;
+            border: 1px solid #456;
+            color: #99aabb;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .roulette-arrow:hover {
+            border-color: #00e054;
+            color: #00e054;
+        }
+
+        .roulette-arrow:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         .spin-genre-btn {
@@ -310,12 +327,10 @@
             border: 1px solid #456;
             color: #99aabb;
             font-size: 0.85rem;
-            padding: 6px 20px;
+            padding: 6px 18px;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.2s;
-            display: block;
-            margin: 0 auto;
         }
 
         .spin-genre-btn:hover {
@@ -365,11 +380,14 @@
         </div>
 
         <div class="genre-section">
-            <div class="wheel-container">
-                <div class="wheel-pointer"></div>
-                <canvas id="genreWheel"></canvas>
+            <div class="roulette-box" id="rouletteBox">
+                <canvas id="rouletteCanvas"></canvas>
             </div>
-            <button class="spin-genre-btn" id="spinGenreBtn" onclick="spinGenre()">&#x27F3; Spin</button>
+            <div class="roulette-nav">
+                <button class="roulette-arrow" id="arrowLeft" onclick="nudgeRoulette(-1)">&#9664;</button>
+                <button class="spin-genre-btn" id="spinGenreBtn" onclick="spinGenre()">&#x27F3; Spin</button>
+                <button class="roulette-arrow" id="arrowRight" onclick="nudgeRoulette(1)">&#9654;</button>
+            </div>
         </div>
 
         <button class="btn" id="pickBtn" onclick="fetchWatchlist()">Pick Random Movie</button>
@@ -432,158 +450,169 @@
             if (e.key === 'Enter') fetchWatchlist();
         });
 
-        // --- Roulette Wheel ---
-        const wheelCanvas = document.getElementById('genreWheel');
-        const WHEEL_SIZE = 300;
-        const SEG = (2 * Math.PI) / genres.length;
-        let wheelAngle = -Math.PI / 2 - SEG / 2; // Segment 0 at top
+        // --- Roulette Strip ---
+        const rouletteCanvas = document.getElementById('rouletteCanvas');
+        const REEL_W = 300;
+        const REEL_H = 70;
+        const ITEM_W = 100;
+        let reelOffset = 0; // pixels scrolled; offset N means genre[N/ITEM_W] is centered
         let spinning = false;
 
-        // Hi-DPI canvas setup
-        (function initCanvas() {
+        (function initRoulette() {
             const dpr = window.devicePixelRatio || 1;
-            wheelCanvas.width = WHEEL_SIZE * dpr;
-            wheelCanvas.height = WHEEL_SIZE * dpr;
-            wheelCanvas.style.width = WHEEL_SIZE + 'px';
-            wheelCanvas.style.height = WHEEL_SIZE + 'px';
-            wheelCanvas.getContext('2d').scale(dpr, dpr);
+            rouletteCanvas.width = REEL_W * dpr;
+            rouletteCanvas.height = REEL_H * dpr;
+            rouletteCanvas.style.width = REEL_W + 'px';
+            rouletteCanvas.style.height = REEL_H + 'px';
+            rouletteCanvas.getContext('2d').scale(dpr, dpr);
         })();
 
-        function hexDarken(hex, f) {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            return `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
+        function centeredGenreIdx() {
+            const i = Math.round(reelOffset / ITEM_W);
+            return ((i % genres.length) + genres.length) % genres.length;
         }
 
-        function drawWheel(angle) {
-            const ctx = wheelCanvas.getContext('2d');
-            const s = WHEEL_SIZE;
-            const cx = s / 2, cy = s / 2;
-            const r = s / 2 - 2;
+        function drawReel(offset) {
+            const ctx = rouletteCanvas.getContext('2d');
+            const W = REEL_W, H = REEL_H, CX = W / 2;
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = '#1a1f27';
+            ctx.fillRect(0, 0, W, H);
 
-            ctx.clearRect(0, 0, s, s);
+            const centerAbs = Math.round(offset / ITEM_W);
+            for (let di = -4; di <= 4; di++) {
+                const absIdx = centerAbs + di;
+                const gi = ((absIdx % genres.length) + genres.length) % genres.length;
+                const g = genres[gi];
+                const isCenter = di === 0;
+                const x = CX + absIdx * ITEM_W - offset;
+                if (x < -ITEM_W || x > W + ITEM_W) continue;
 
-            genres.forEach((g, i) => {
-                const start = angle + i * SEG;
-                const end = start + SEG;
-                const isSelected = selectedGenre === g.slug;
+                const dist = Math.abs(x - CX);
+                const alpha = Math.max(0.15, 1 - (dist / (CX + ITEM_W)) * 0.88);
+                const isActive = isCenter && selectedGenre === g.slug;
 
-                ctx.beginPath();
-                ctx.moveTo(cx, cy);
-                ctx.arc(cx, cy, r, start, end);
-                ctx.closePath();
-                ctx.fillStyle = selectedGenre && !isSelected ? hexDarken(g.color, 0.45) : g.color;
-                ctx.fill();
-                ctx.strokeStyle = '#0e1216';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
+                ctx.save();
+                ctx.globalAlpha = alpha;
 
-                // White arc highlight on selected segment
-                if (isSelected) {
-                    ctx.save();
+                // Highlight box for center item
+                if (isCenter) {
+                    const pw = ITEM_W - 14, ph = H - 14;
+                    const px = x - pw / 2, py = H / 2 - ph / 2, rad = 6;
+                    ctx.fillStyle = isActive ? g.color + '2a' : 'rgba(255,255,255,0.04)';
+                    ctx.strokeStyle = isActive ? g.color : 'rgba(255,255,255,0.13)';
+                    ctx.lineWidth = 1.5;
                     ctx.beginPath();
-                    ctx.arc(cx, cy, r - 5, start + 0.04, end - 0.04);
-                    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-                    ctx.lineWidth = 3;
+                    ctx.moveTo(px + rad, py);
+                    ctx.lineTo(px + pw - rad, py);
+                    ctx.arcTo(px + pw, py, px + pw, py + rad, rad);
+                    ctx.lineTo(px + pw, py + ph - rad);
+                    ctx.arcTo(px + pw, py + ph, px + pw - rad, py + ph, rad);
+                    ctx.lineTo(px + rad, py + ph);
+                    ctx.arcTo(px, py + ph, px, py + ph - rad, rad);
+                    ctx.lineTo(px, py + rad);
+                    ctx.arcTo(px, py, px + rad, py, rad);
+                    ctx.closePath();
+                    ctx.fill();
                     ctx.stroke();
-                    ctx.restore();
                 }
 
-                // Label
-                const mid = start + SEG / 2;
-                ctx.save();
-                ctx.translate(cx, cy);
-                ctx.rotate(mid);
-                ctx.textAlign = 'right';
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-                ctx.shadowColor = 'rgba(0,0,0,0.7)';
-                ctx.shadowBlur = 3;
-                ctx.fillText(g.name, r - 10, 4);
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = isCenter ? (isActive ? g.color : '#c8d6e0') : '#3d4f5f';
+                ctx.font = `${isCenter ? 'bold 14px' : '12px'} -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+                if (isActive) { ctx.shadowColor = g.color; ctx.shadowBlur = 8; }
+                ctx.fillText(g.name, x, H / 2);
                 ctx.restore();
-            });
+            }
 
-            // Outer border ring
+            // Green tick marks at top & bottom of selection zone
+            const tx1 = CX - ITEM_W / 2 + 6, tx2 = CX + ITEM_W / 2 - 6;
+            ctx.strokeStyle = '#00e054';
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.55;
             ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-            ctx.strokeStyle = '#2c3440';
-            ctx.lineWidth = 3;
+            ctx.moveTo(tx1, 0);    ctx.lineTo(tx1, 9);
+            ctx.moveTo(tx2, 0);    ctx.lineTo(tx2, 9);
+            ctx.moveTo(tx1, H - 9); ctx.lineTo(tx1, H);
+            ctx.moveTo(tx2, H - 9); ctx.lineTo(tx2, H);
             ctx.stroke();
+            ctx.globalAlpha = 1;
 
-            // Center hub
-            ctx.beginPath();
-            ctx.arc(cx, cy, 18, 0, 2 * Math.PI);
-            ctx.fillStyle = '#14181c';
-            ctx.fill();
-            ctx.strokeStyle = selectedGenre ? '#00e054' : '#456';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            // Edge fade overlay
+            const fl = ctx.createLinearGradient(0, 0, 72, 0);
+            fl.addColorStop(0, '#1a1f27'); fl.addColorStop(1, 'rgba(26,31,39,0)');
+            ctx.fillStyle = fl; ctx.fillRect(0, 0, 72, H);
+            const fr = ctx.createLinearGradient(W - 72, 0, W, 0);
+            fr.addColorStop(0, 'rgba(26,31,39,0)'); fr.addColorStop(1, '#1a1f27');
+            ctx.fillStyle = fr; ctx.fillRect(W - 72, 0, 72, H);
         }
 
-        function selectGenre(slug) {
-            selectedGenre = (selectedGenre === slug) ? null : slug;
-            cachedMovies = [];
-            currentUsername = '';
-            drawWheel(wheelAngle);
+        function animateReel(from, to, duration, easeFn, onDone) {
+            const start = performance.now();
+            function frame(now) {
+                const t = Math.min((now - start) / duration, 1);
+                reelOffset = from + (to - from) * easeFn(t);
+                drawReel(reelOffset);
+                if (t < 1) { requestAnimationFrame(frame); }
+                else { reelOffset = to; drawReel(reelOffset); if (onDone) onDone(); }
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function commitCenter() {
+            selectedGenre = genres[centeredGenreIdx()].slug;
+            cachedMovies = []; currentUsername = '';
+            drawReel(reelOffset);
+        }
+
+        function nudgeRoulette(dir) {
+            if (spinning) return;
+            const target = Math.round((reelOffset + dir * ITEM_W) / ITEM_W) * ITEM_W;
+            animateReel(reelOffset, target, 280, t => 1 - Math.pow(1 - t, 3), commitCenter);
         }
 
         function spinGenre() {
             if (spinning) return;
             spinning = true;
+            document.getElementById('spinGenreBtn').disabled = true;
+            document.getElementById('arrowLeft').disabled = true;
+            document.getElementById('arrowRight').disabled = true;
+            selectedGenre = null; cachedMovies = []; currentUsername = '';
+            drawReel(reelOffset);
 
-            const spinBtn = document.getElementById('spinGenreBtn');
-            spinBtn.disabled = true;
+            const targetGi = Math.floor(Math.random() * genres.length);
+            const curAbs = Math.round(reelOffset / ITEM_W);
+            const fullRots = 5 + Math.floor(Math.random() * 4);
+            let targetAbs = curAbs + fullRots * genres.length;
+            const landGi = ((targetAbs % genres.length) + genres.length) % genres.length;
+            let adj = targetGi - landGi; if (adj < 0) adj += genres.length;
+            targetAbs += adj;
 
-            selectedGenre = null;
-            cachedMovies = [];
-            currentUsername = '';
-
-            const targetIndex = Math.floor(Math.random() * genres.length);
-
-            // Target wheelAngle: center of targetIndex segment lands at pointer (top = -π/2)
-            // center of seg i = angle + i*SEG + SEG/2 = -π/2  →  angle = -π/2 - i*SEG - SEG/2
-            const base = -Math.PI / 2 - targetIndex * SEG - SEG / 2;
-            const minTarget = wheelAngle + 5 * 2 * Math.PI;
-            const k = Math.ceil((minTarget - base) / (2 * Math.PI));
-            const targetAngle = base + k * 2 * Math.PI;
-
-            const startAngle = wheelAngle;
-            const distance = targetAngle - startAngle;
-            const duration = 4000;
-            const startTime = performance.now();
-
-            function animate(now) {
-                const t = Math.min((now - startTime) / duration, 1);
-                const eased = 1 - Math.pow(1 - t, 4); // ease-out quart
-                wheelAngle = startAngle + distance * eased;
-                drawWheel(wheelAngle);
-                if (t < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    wheelAngle = targetAngle;
-                    spinning = false;
-                    spinBtn.disabled = false;
-                    selectGenre(genres[targetIndex].slug);
-                }
-            }
-
-            requestAnimationFrame(animate);
+            animateReel(reelOffset, targetAbs * ITEM_W, 4000, t => 1 - Math.pow(1 - t, 4), () => {
+                spinning = false;
+                document.getElementById('spinGenreBtn').disabled = false;
+                document.getElementById('arrowLeft').disabled = false;
+                document.getElementById('arrowRight').disabled = false;
+                commitCenter();
+            });
         }
 
-        // Click a wheel segment to select it
-        wheelCanvas.addEventListener('click', (e) => {
+        rouletteCanvas.addEventListener('click', (e) => {
             if (spinning) return;
-            const rect = wheelCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left - WHEEL_SIZE / 2;
-            const y = e.clientY - rect.top - WHEEL_SIZE / 2;
-            const dist = Math.sqrt(x * x + y * y);
-            if (dist > WHEEL_SIZE / 2 - 2 || dist < 18) return;
-            let clickAngle = ((Math.atan2(y, x) - wheelAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-            selectGenre(genres[Math.floor(clickAngle / SEG) % genres.length].slug);
+            const x = e.clientX - rouletteCanvas.getBoundingClientRect().left;
+            const CX = REEL_W / 2;
+            if (x < CX - ITEM_W / 2) { nudgeRoulette(-1); }
+            else if (x > CX + ITEM_W / 2) { nudgeRoulette(1); }
+            else {
+                const gi = centeredGenreIdx();
+                selectedGenre = selectedGenre === genres[gi].slug ? null : genres[gi].slug;
+                cachedMovies = []; currentUsername = '';
+                drawReel(reelOffset);
+            }
         });
 
-        drawWheel(wheelAngle);
+        drawReel(reelOffset);
 
         async function fetchWatchlist() {
             const username = usernameInput.value.trim().toLowerCase();
