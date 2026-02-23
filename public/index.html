@@ -275,6 +275,75 @@
             color: #00e054;
         }
 
+        .genre-section {
+            margin-bottom: 16px;
+        }
+
+        .genre-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .genre-label {
+            color: #678;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .spin-genre-btn {
+            background: transparent;
+            border: 1px solid #456;
+            color: #99aabb;
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .spin-genre-btn:hover {
+            border-color: #00e054;
+            color: #00e054;
+        }
+
+        .spin-genre-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .genre-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .genre-chip {
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1.5px solid;
+            font-size: 0.8rem;
+            cursor: pointer;
+            background: transparent;
+            transition: all 0.15s;
+            user-select: none;
+        }
+
+        .genre-chip:hover {
+            opacity: 0.85;
+        }
+
+        .genre-chip.selected {
+            color: #14181c;
+        }
+
+        .genre-chip.roulette-active {
+            box-shadow: 0 0 8px currentColor;
+            transform: scale(1.08);
+        }
+
         /* Responsive */
         @media (max-width: 480px) {
             body {
@@ -311,6 +380,14 @@
             </div>
         </div>
 
+        <div class="genre-section">
+            <div class="genre-header">
+                <span class="genre-label">Genre</span>
+                <button class="spin-genre-btn" id="spinGenreBtn" onclick="spinGenre()">&#x27F3; Spin</button>
+            </div>
+            <div class="genre-chips" id="genreChips"></div>
+        </div>
+
         <button class="btn" id="pickBtn" onclick="fetchWatchlist()">Pick Random Movie</button>
 
         <div id="loading" class="loading" style="display: none;">
@@ -342,6 +419,23 @@
         let cachedMovies = [];
         let currentUsername = '';
         let useAPI = false;
+        let selectedGenre = null;
+
+        const genres = [
+            { name: 'Action',      slug: 'action',          color: '#e74c3c' },
+            { name: 'Adventure',   slug: 'adventure',       color: '#27ae60' },
+            { name: 'Animation',   slug: 'animation',       color: '#1abc9c' },
+            { name: 'Comedy',      slug: 'comedy',          color: '#f1c40f' },
+            { name: 'Crime',       slug: 'crime',           color: '#7f8c8d' },
+            { name: 'Documentary', slug: 'documentary',     color: '#3498db' },
+            { name: 'Drama',       slug: 'drama',           color: '#8e44ad' },
+            { name: 'Fantasy',     slug: 'fantasy',         color: '#9b59b6' },
+            { name: 'Horror',      slug: 'horror',          color: '#c0392b' },
+            { name: 'Mystery',     slug: 'mystery',         color: '#2980b9' },
+            { name: 'Romance',     slug: 'romance',         color: '#e91e8c' },
+            { name: 'Sci-Fi',      slug: 'science-fiction', color: '#00bcd4' },
+            { name: 'Thriller',    slug: 'thriller',        color: '#e67e22' },
+        ];
 
         const usernameInput = document.getElementById('username');
         const pickBtn = document.getElementById('pickBtn');
@@ -354,6 +448,97 @@
             if (e.key === 'Enter') fetchWatchlist();
         });
 
+        function renderGenreChips() {
+            const container = document.getElementById('genreChips');
+            container.innerHTML = '';
+            genres.forEach(g => {
+                const chip = document.createElement('span');
+                chip.className = 'genre-chip';
+                chip.dataset.slug = g.slug;
+                chip.textContent = g.name;
+                chip.style.borderColor = g.color;
+                chip.style.color = g.color;
+                chip.onclick = () => selectGenre(g.slug);
+                container.appendChild(chip);
+            });
+        }
+
+        function selectGenre(slug) {
+            if (selectedGenre === slug) {
+                selectedGenre = null;
+            } else {
+                selectedGenre = slug;
+            }
+            // Clear cache so re-fetch happens with new genre filter
+            cachedMovies = [];
+            currentUsername = '';
+
+            // Update chip visuals
+            document.querySelectorAll('.genre-chip').forEach(chip => {
+                const g = genres.find(x => x.slug === chip.dataset.slug);
+                if (!g) return;
+                if (chip.dataset.slug === selectedGenre) {
+                    chip.classList.add('selected');
+                    chip.style.backgroundColor = g.color;
+                    chip.style.color = '#14181c';
+                    chip.style.borderColor = g.color;
+                } else {
+                    chip.classList.remove('selected');
+                    chip.style.backgroundColor = '';
+                    chip.style.color = g.color;
+                    chip.style.borderColor = g.color;
+                }
+            });
+        }
+
+        function spinGenre() {
+            const spinBtn = document.getElementById('spinGenreBtn');
+            spinBtn.disabled = true;
+
+            // Clear any existing selection
+            selectedGenre = null;
+            cachedMovies = [];
+            currentUsername = '';
+            document.querySelectorAll('.genre-chip').forEach(chip => {
+                const g = genres.find(x => x.slug === chip.dataset.slug);
+                chip.classList.remove('selected', 'roulette-active');
+                chip.style.backgroundColor = '';
+                chip.style.color = g ? g.color : '';
+            });
+
+            const totalSteps = 25;
+            let step = 0;
+            let activeIndex = Math.floor(Math.random() * genres.length);
+            const targetIndex = Math.floor(Math.random() * genres.length);
+
+            function tick() {
+                // Remove active from previous
+                document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('roulette-active'));
+
+                const chip = document.querySelector(`.genre-chip[data-slug="${genres[activeIndex].slug}"]`);
+                if (chip) chip.classList.add('roulette-active');
+
+                step++;
+                const progress = step / totalSteps;
+                // Ease in delay: starts fast (~40ms), slows to ~160ms
+                const delay = 40 + Math.pow(progress, 2) * 120;
+
+                if (step < totalSteps) {
+                    activeIndex = (activeIndex + 1) % genres.length;
+                    setTimeout(tick, delay);
+                } else {
+                    // Land on target
+                    document.querySelectorAll('.genre-chip').forEach(c => c.classList.remove('roulette-active'));
+                    selectGenre(genres[targetIndex].slug);
+                    spinBtn.disabled = false;
+                }
+            }
+
+            tick();
+        }
+
+        renderGenreChips();
+
         async function fetchWatchlist() {
             const username = usernameInput.value.trim().toLowerCase();
 
@@ -362,8 +547,9 @@
                 return;
             }
 
-            // If same user and we have cached data, just pick another
-            if (username === currentUsername && cachedMovies.length > 0) {
+            // If same user+genre and we have cached data, just pick another
+            const cacheKey = username + (selectedGenre || '');
+            if (cacheKey === currentUsername && cachedMovies.length > 0) {
                 pickAnother();
                 return;
             }
@@ -372,13 +558,14 @@
             hideError();
             hideResult();
             cachedMovies = [];
-            currentUsername = username;
+            currentUsername = cacheKey;
 
             try {
                 // Try our own serverless API first (Cloudflare Workers)
                 async function tryOwnAPI(user) {
                     try {
-                        const response = await fetch(`/api/watchlist?username=${user}`);
+                        const genreParam = selectedGenre ? `&genre=${selectedGenre}` : '';
+                        const response = await fetch(`/api/watchlist?username=${user}${genreParam}`);
                         if (response.ok) {
                             const data = await response.json();
                             if (data.movies && data.movies.length > 0) {

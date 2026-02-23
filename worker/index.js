@@ -37,6 +37,13 @@ async function handleWatchlistAPI(request) {
     });
   }
 
+  const genre = url.searchParams.get('genre') || '';
+
+  // If genre filter requested, skip StremThru and scrape genre-filtered URL directly
+  if (genre) {
+    return await fallbackScrape(username, corsHeaders, genre);
+  }
+
   try {
     // Step 1: Get the Letterboxd identifier from the RSS feed (not blocked by Cloudflare)
     const rssUrl = `https://letterboxd.com/${username}/rss/`;
@@ -75,7 +82,7 @@ async function handleWatchlistAPI(request) {
 
     if (!dataResponse.ok) {
       console.log(`StremThru API error: ${dataResponse.status}`);
-      return await fallbackScrape(username, corsHeaders);
+      return await fallbackScrape(username, corsHeaders, '');
     }
 
     const data = await dataResponse.json();
@@ -149,14 +156,16 @@ async function handleWatchlistAPI(request) {
 }
 
 // Fallback to direct scraping if StremThru doesn't work
-async function fallbackScrape(username, corsHeaders) {
+async function fallbackScrape(username, corsHeaders, genre) {
   try {
     const allMovies = [];
     let page = 1;
     let hasMore = true;
 
     while (hasMore && page <= 10) {
-      const letterboxdUrl = `https://letterboxd.com/${username}/watchlist/page/${page}/`;
+      const letterboxdUrl = genre
+        ? `https://letterboxd.com/${username}/watchlist/genre/${genre}/page/${page}/`
+        : `https://letterboxd.com/${username}/watchlist/page/${page}/`;
 
       const response = await fetch(letterboxdUrl, {
         headers: {
