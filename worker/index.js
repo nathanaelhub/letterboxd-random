@@ -2,6 +2,24 @@
 
 const STREMTHRU_API_BASE = "https://stremthru.13377001.xyz/v0";
 
+// Maps our Letterboxd genre slugs to StremThru's internal genre_ids
+// Identified empirically from StremThru watchlist responses
+const GENRE_ID_MAP = {
+  'action':          '8G',
+  'adventure':       '9k',
+  'animation':       '8m',
+  'comedy':          '7I',
+  'crime':           '9Y',
+  'drama':           '7S',
+  'fantasy':         '82',
+  'horror':          'aC',
+  'mystery':         'aW',
+  'romance':         '8c',
+  'science-fiction': '9a',
+  'thriller':        'a8',
+  'documentary':     null, // ID unknown; returns full watchlist as fallback
+};
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -38,11 +56,7 @@ async function handleWatchlistAPI(request) {
   }
 
   const genre = url.searchParams.get('genre') || '';
-
-  // If genre filter requested, skip StremThru and scrape genre-filtered URL directly
-  if (genre) {
-    return await fallbackScrape(username, corsHeaders, genre);
-  }
+  const genreId = genre ? (GENRE_ID_MAP[genre] ?? undefined) : undefined;
 
   try {
     // Step 1: Get the Letterboxd identifier from the RSS feed (not blocked by Cloudflare)
@@ -82,7 +96,7 @@ async function handleWatchlistAPI(request) {
 
     if (!dataResponse.ok) {
       console.log(`StremThru API error: ${dataResponse.status}`);
-      return await fallbackScrape(username, corsHeaders, '');
+      return await fallbackScrape(username, corsHeaders);
     }
 
     const data = await dataResponse.json();
@@ -94,8 +108,22 @@ async function handleWatchlistAPI(request) {
       });
     }
 
+    // Filter by genre if requested (using StremThru's genre_ids field)
+    // genreId === undefined means unknown genre slug → no filter (return all)
+    // genreId === null means documentary (unmapped) → no filter
+    const items = genreId
+      ? data.data.items.filter(item => Array.isArray(item.genre_ids) && item.genre_ids.includes(genreId))
+      : data.data.items;
+
+    if (genre && genreId && items.length === 0) {
+      return new Response(JSON.stringify({ error: `No ${genre} movies found in watchlist` }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Transform StremThru response to our format
-    const movies = data.data.items.map(item => {
+    const movies = items.map(item => {
       // Extract valid Letterboxd slug - prefer letterboxd_slug, then slug
       // StremThru may return compound IDs, so we clean them
       let filmSlug = item.letterboxd_slug || item.slug || '';
@@ -155,17 +183,15 @@ async function handleWatchlistAPI(request) {
   }
 }
 
-// Fallback to direct scraping if StremThru doesn't work
-async function fallbackScrape(username, corsHeaders, genre) {
+// Fallback to direct scraping if StremThru doesn't work (full watchlist, no genre filter)
+async function fallbackScrape(username, corsHeaders) {
   try {
     const allMovies = [];
     let page = 1;
     let hasMore = true;
 
     while (hasMore && page <= 10) {
-      const letterboxdUrl = genre
-        ? `https://letterboxd.com/${username}/watchlist/genre/${genre}/page/${page}/`
-        : `https://letterboxd.com/${username}/watchlist/page/${page}/`;
+      const letterboxdUrl = `https://letterboxd.com/${username}/watchlist/page/${page}/`;
 
       const response = await fetch(letterboxdUrl, {
         headers: {
