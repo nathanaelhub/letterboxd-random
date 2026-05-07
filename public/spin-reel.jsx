@@ -19,12 +19,13 @@ function SpinReel({ movies, picked, spinning, onSpinDone, posterW, posterH, them
       }
       return a;
     };
-    // Ensure each strip has at least ~36 items so the spin reads as motion
-    // even with a tiny watchlist.
-    const repeats = Math.max(6, Math.ceil(36 / movies.length));
+    // Cap the visual pool to 24 items — enough for smooth motion without
+    // rendering thousands of DOM nodes when the watchlist is large.
+    const pool = shuffle(movies).slice(0, 24);
+    const repeats = Math.max(6, Math.ceil(36 / pool.length));
     const make = (endWith) => {
       let strip = [];
-      for (let r = 0; r < repeats; r++) strip = strip.concat(shuffle(movies));
+      for (let r = 0; r < repeats; r++) strip = strip.concat(shuffle(pool));
       if (endWith) strip.push(endWith);
       return strip;
     };
