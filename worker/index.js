@@ -156,6 +156,15 @@ async function handleWatchlistAPI(request) {
       };
     }).filter(movie => movie.slug && movie.link);
 
+    if (movies.length === 0) {
+      return new Response(JSON.stringify({
+        error: 'No films matched — check the username or loosen the filters.'
+      }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     const random = url.searchParams.get('random') === 'true';
     if (random) {
       const randomIndex = Math.floor(Math.random() * movies.length);
